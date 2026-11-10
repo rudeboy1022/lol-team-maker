@@ -1,0 +1,755 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LoLカスタム チームメイカー</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=Chakra+Petch:wght@500;600&display=swap">
+<style>
+/* Layout: hextech client panel — roster on the left, mode console on the right; stacks on phones */
+:root{
+  --bg:#0a1018; --panel:#111a24; --panel-2:#16212d; --line:#263342; --line-2:#344658;
+  --fg:#ebe4d3; --muted:#8a97a4; --gold:#c8aa6e; --gold-hi:#f0e6d2; --gold-ink:#1a1408;
+  --blue:#4a9be6; --blue-bg:rgba(74,155,230,.10); --red:#e5574a; --red-bg:rgba(229,87,74,.10);
+  --warn:#e59a4a; --ok:#6fc49a;
+  --f-display:"Cinzel","Times New Roman",serif;
+  --f-body:"Zen Kaku Gothic New","Hiragino Sans","Yu Gothic UI","Meiryo",system-ui,sans-serif;
+  --f-num:"Chakra Petch","Consolas",ui-monospace,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{background:var(--bg)}
+body{color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.6;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 56px;
+  background-image:radial-gradient(1200px 500px at 70% -10%,rgba(200,170,110,.07),transparent 60%)}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.wrap{max-width:1180px;margin:0 auto;display:grid;gap:24px}
+header{display:grid;gap:4px}
+.eyebrow{font-family:var(--f-display);font-weight:600;letter-spacing:.22em;font-size:11px;color:var(--gold)}
+h1{margin:0;font-size:clamp(24px,4vw,34px);font-weight:700;letter-spacing:.02em;text-wrap:balance;color:var(--gold-hi)}
+header p{margin:0;color:var(--muted);max-width:62ch}
+.grid{display:grid;grid-template-columns:minmax(0,1fr);gap:24px}
+.views{display:flex;border-bottom:1px solid var(--line);overflow-x:auto}
+.view{appearance:none;background:transparent;border:0;border-bottom:2px solid transparent;margin-bottom:-1px;padding:10px 18px;font-size:15px;font-weight:700;color:var(--muted);cursor:pointer;display:flex;gap:10px;align-items:center;white-space:nowrap}
+.view:hover{color:var(--fg)}
+.view[aria-selected="true"]{color:var(--gold-hi);border-bottom-color:var(--gold)}
+.view .count{font-size:12px;padding:0 8px}
+.next{display:flex;justify-content:flex-end;border-top:1px solid var(--line);padding-top:14px}
+.panel{background:var(--panel);border:1px solid var(--line);position:relative}
+.panel::before{content:"";position:absolute;inset:-1px;border-top:1px solid var(--gold);pointer-events:none;
+  clip-path:polygon(0 0,64px 0,64px 2px,0 2px)}
+.ph{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:14px 16px;border-bottom:1px solid var(--line)}
+.ph h2{margin:0;font-size:16px;font-weight:700;color:var(--gold-hi)}
+.pb{padding:16px;display:grid;gap:14px}
+.count{font-family:var(--f-num);font-weight:600;font-size:14px;padding:2px 10px;border:1px solid var(--line-2);font-variant-numeric:tabular-nums}
+.count.ok{border-color:var(--ok);color:var(--ok)}
+.count.ng{border-color:var(--warn);color:var(--warn)}
+.note{font-size:13px;color:var(--muted)}
+.sample{font-size:13px;border:1px dashed var(--line-2);padding:8px 12px;color:var(--muted);display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:space-between}
+
+/* buttons */
+.btn{appearance:none;border:1px solid var(--line-2);background:var(--panel-2);padding:7px 14px;cursor:pointer;font-weight:500;font-size:14px;line-height:1.3}
+.btn:hover{border-color:var(--gold)}
+.btn.primary{background:linear-gradient(180deg,#d4b87e,#a8894f);border-color:#e3cd9b;color:var(--gold-ink);font-weight:700}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.small{padding:4px 10px;font-size:13px}
+.btn.ghost{background:transparent}
+.btn:disabled{opacity:.45;cursor:not-allowed;filter:none}
+.row-actions{display:flex;gap:8px;flex-wrap:wrap}
+
+/* roster */
+.roster{display:grid;gap:6px}
+.pl{display:grid;grid-template-columns:auto minmax(0,1fr) 150px auto auto;gap:8px;align-items:center;padding:6px 8px;border:1px solid transparent;background:var(--panel-2)}
+.pl.off{opacity:.5}
+.pl.on{border-color:var(--line-2)}
+.pl input[type=text]{min-width:0;width:100%;background:transparent;border:1px solid transparent;padding:4px 6px}
+.pl input[type=text]:hover,.pl input[type=text]:focus{border-color:var(--line-2);background:var(--bg)}
+.pl select{width:100%;background:var(--bg);border:1px solid var(--line-2);padding:4px 6px;font-size:13px}
+.chk{width:20px;height:20px;accent-color:var(--gold);cursor:pointer}
+.chips{display:flex;gap:3px}
+.chip{appearance:none;border:1px solid var(--line-2);background:transparent;color:var(--muted);font-family:var(--f-num);font-weight:600;font-size:11px;letter-spacing:.04em;width:40px;padding:4px 0;cursor:pointer;opacity:.55}
+.chip[data-s="1"]{opacity:1;color:var(--gold);border-color:var(--gold)}
+.chip[data-s="2"]{opacity:1;color:var(--gold-ink);background:var(--gold);border-color:var(--gold)}
+.del{appearance:none;background:transparent;border:0;color:var(--muted);cursor:pointer;font-size:18px;width:28px;line-height:1}
+.del:hover{color:var(--red)}
+@media (max-width:560px){
+  .pl{grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"c n d" "c r r" "c ch ch"}
+  .pl .chk{grid-area:c;align-self:start;margin-top:6px}
+  .pl input[type=text]{grid-area:n}.pl select{grid-area:r}.pl .chips{grid-area:ch}.pl .del{grid-area:d}
+  .chip{flex:1;width:auto}
+}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--muted);align-items:center}
+.legend .chip{width:auto;padding:2px 8px;cursor:default}
+details{border-top:1px solid var(--line);padding-top:12px}
+summary{cursor:pointer;font-size:14px;color:var(--gold)}
+textarea{width:100%;min-height:120px;background:var(--bg);border:1px solid var(--line-2);padding:8px;font-family:var(--f-num);font-size:13px;resize:vertical}
+
+/* tabs */
+.tabs{display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid var(--line)}
+.tab{appearance:none;background:transparent;border:0;border-bottom:2px solid transparent;padding:14px 10px;cursor:pointer;display:grid;gap:2px;text-align:left;padding-left:16px}
+.tab b{font-size:15px;color:var(--muted)}
+.tab span{font-size:12px;color:var(--muted)}
+.tab[aria-selected="true"]{border-bottom-color:var(--gold);background:var(--panel-2)}
+.tab[aria-selected="true"] b{color:var(--gold-hi)}
+.field{display:grid;gap:6px}
+.field > label,.lbl{font-size:12px;letter-spacing:.08em;color:var(--muted)}
+.seg{display:flex;border:1px solid var(--line-2);width:fit-content;max-width:100%;flex-wrap:wrap}
+.seg button{appearance:none;background:transparent;border:0;padding:6px 14px;cursor:pointer;font-size:13px;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--gold);color:var(--gold-ink);font-weight:700}
+.opts{display:flex;gap:18px;flex-wrap:wrap}
+.leaders{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.leaders select{width:100%;background:var(--bg);border:1px solid var(--line-2);padding:7px 8px}
+.msg{font-size:13px;color:var(--warn)}
+
+/* results */
+.teams{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:520px){.teams{grid-template-columns:minmax(0,1fr)}}
+.team{border:1px solid var(--line);border-top:2px solid var(--c);background:var(--cbg);min-width:0}
+.team.blue{--c:var(--blue);--cbg:var(--blue-bg)}
+.team.red{--c:var(--red);--cbg:var(--red-bg)}
+.th{padding:10px 12px;display:grid;gap:2px;border-bottom:1px solid var(--line)}
+.th .side{font-family:var(--f-display);font-weight:800;letter-spacing:.16em;font-size:15px;color:var(--c)}
+.th .tname{font-weight:700;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.th .avg{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.th .avg b{color:var(--fg);font-weight:500}
+.mem{list-style:none;margin:0;padding:4px 0}
+.mem li{display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:8px;align-items:center;padding:6px 12px;cursor:default}
+.mem.swappable li{cursor:pointer}
+.mem.swappable li:hover{background:rgba(255,255,255,.03)}
+.mem li.sel{background:rgba(200,170,110,.16);outline:1px solid var(--gold)}
+.mem .role{font-family:var(--f-num);font-weight:600;font-size:12px;color:var(--c)}
+.mem .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mem .rk{display:block;font-size:11px;color:var(--muted)}
+.fit{font-size:11px;padding:1px 6px;border:1px solid var(--line-2);color:var(--muted);white-space:nowrap}
+.fit.main{color:var(--gold);border-color:var(--gold)}
+.fit.offr{color:var(--warn);border-color:var(--warn)}
+.diff{display:flex;gap:16px;flex-wrap:wrap;align-items:baseline;font-size:13px;color:var(--muted)}
+.diff .num{font-family:var(--f-num);font-size:20px;color:var(--fg);font-variant-numeric:tabular-nums}
+pre.out{margin:0;background:var(--bg);border:1px solid var(--line-2);padding:10px 12px;font-family:var(--f-num);font-size:12.5px;white-space:pre-wrap;word-break:break-word;max-height:260px;overflow:auto;user-select:all}
+.toast{font-size:13px;color:var(--ok);min-height:1.2em}
+#balResult,#dRes{display:grid;gap:14px}
+#balResult:empty{display:none}
+
+/* draft */
+.turn{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 12px;border:1px solid var(--gold);background:rgba(200,170,110,.08)}
+.turn .who{font-weight:700;color:var(--gold-hi)}
+.turn .step{font-family:var(--f-num);color:var(--muted);font-variant-numeric:tabular-nums}
+.order{display:flex;gap:4px;flex-wrap:wrap}
+.order i{font-style:normal;font-family:var(--f-num);font-size:11px;width:22px;text-align:center;padding:2px 0;border:1px solid var(--line-2);color:var(--muted)}
+.order i.a{border-color:var(--blue);color:var(--blue)}.order i.b{border-color:var(--red);color:var(--red)}
+.order i.done{opacity:.35}.order i.now{background:var(--gold);color:var(--gold-ink);border-color:var(--gold)}
+.pool{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.card{appearance:none;text-align:left;background:var(--panel-2);border:1px solid var(--line-2);padding:10px;cursor:pointer;display:grid;gap:4px;min-width:0}
+.card:hover{border-color:var(--gold);background:#1b2836}
+.card .nm{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card .rk{font-size:12px;color:var(--muted)}
+.card .rl{display:flex;gap:3px;flex-wrap:wrap}
+.card .rl span{font-family:var(--f-num);font-size:10px;padding:0 5px;border:1px solid var(--line-2);color:var(--muted)}
+.card .rl span.m{border-color:var(--gold);color:var(--gold)}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:1px;background:var(--t)}
+@media (prefers-reduced-motion:no-preference){.team{animation:rise .35s ease both}.team.red{animation-delay:.06s}@keyframes rise{from{transform:translateY(6px)}to{transform:none}}}
+
+/* ===== FX: hype mode ===== */
+#bgfx,#fx{position:fixed;inset:0;width:100%;height:100%;pointer-events:none}
+#bgfx{z-index:0}#fx{z-index:70}
+.wrap{position:relative;z-index:1}
+.toprow{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+#sfxBtn[aria-pressed="false"]{opacity:.6}
+h1{background:linear-gradient(100deg,#f0e6d2 0%,#f0e6d2 40%,#fff8e0 48%,#e8c77a 52%,#f0e6d2 60%,#f0e6d2 100%);background-size:250% 100%;
+  -webkit-background-clip:text;background-clip:text;color:transparent;animation:shine-text 5s linear infinite}
+@keyframes shine-text{from{background-position:100% 0}to{background-position:-150% 0}}
+.btn{transition:transform .08s,border-color .15s,box-shadow .2s}
+.btn:active:not(:disabled){transform:scale(.95)}
+.btn.primary{position:relative;overflow:hidden;box-shadow:0 0 0 0 rgba(200,170,110,.5);animation:glow 2.4s ease-in-out infinite}
+.btn.primary::after{content:"";position:absolute;top:0;bottom:0;width:40%;left:-60%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.55),transparent);transform:skewX(-20deg);animation:sweep 2.8s ease-in-out infinite}
+@keyframes sweep{0%,55%{left:-60%}100%{left:130%}}
+@keyframes glow{0%,100%{box-shadow:0 0 0 0 rgba(200,170,110,0)}50%{box-shadow:0 0 22px 2px rgba(200,170,110,.45)}}
+.btn.big{font-size:18px;padding:13px 34px;letter-spacing:.08em}
+.view,.tab{transition:color .2s,background .2s,border-color .25s}
+.enter{animation:enter .35s cubic-bezier(.2,1,.3,1) both}
+@keyframes enter{from{opacity:0;transform:translateY(14px) scale(.985)}to{opacity:1;transform:none}}
+.wrap.shake{animation:shake .45s}
+@keyframes shake{0%,100%{transform:none}15%{transform:translate(-8px,3px)}30%{transform:translate(7px,-4px)}45%{transform:translate(-5px,2px)}60%{transform:translate(4px,-1px)}80%{transform:translate(-2px,1px)}}
+.revealing .diff,.revealing .row-actions,.revealing .out,.revealing .toast,.revealing > .note{visibility:hidden}
+.mem li{transition:background .2s}
+.mem li.rolling .nmt{color:var(--gold-hi);filter:blur(.6px);font-family:var(--f-num);letter-spacing:.04em}
+.mem li.rolling .rk,.mem li.rolling .fit,.mem li.rolling .dot{opacity:0}
+.mem li.rolling{background:repeating-linear-gradient(180deg,transparent 0 3px,rgba(255,255,255,.03) 3px 6px)}
+.mem li.lock{animation:lock .6s ease-out}
+@keyframes lock{0%{box-shadow:inset 0 0 0 999px rgba(255,170,70,.6),0 0 28px rgba(255,120,30,.8);transform:scale(1.04)}35%{box-shadow:inset 0 0 0 999px rgba(200,60,15,.3),0 0 14px rgba(255,90,20,.4)}100%{box-shadow:inset 0 0 0 999px transparent;transform:none}}
+.mem li.lock .nmt{animation:hottext 1.4s ease-out}
+@keyframes hottext{0%{color:#fffbe8;text-shadow:0 0 6px #ffd36e,0 0 16px #ff8a2a}40%{color:#ffc06a;text-shadow:0 0 8px #ff6a1a}100%{color:inherit;text-shadow:none}}
+.heatflash{position:fixed;inset:0;z-index:64;pointer-events:none;background:radial-gradient(ellipse at 50% 62%,rgba(255,236,190,.55),rgba(255,120,30,.25) 35%,rgba(160,30,0,.12) 60%,transparent 80%);animation:fadeout .75s ease-out both}
+.teams.glow .team{animation:teamglow 1.2s ease-out}
+@keyframes teamglow{0%{box-shadow:0 0 0 0 var(--c)}30%{box-shadow:0 0 46px 4px color-mix(in srgb,var(--c) 70%,transparent)}100%{box-shadow:0 0 0 0 transparent}}
+.diff .num{display:inline-block}
+.diff .num.done{animation:numpop .5s cubic-bezier(.2,1.6,.4,1)}
+@keyframes numpop{0%{transform:scale(1.8);color:var(--gold-hi)}100%{transform:none}}
+#splash{position:fixed;inset:0;z-index:65;display:grid;place-items:center;pointer-events:none;overflow:hidden}
+#splash::before{content:"";position:absolute;inset:-20%;background:radial-gradient(circle at 50% 50%,rgba(255,220,160,.5),rgba(255,110,20,.2) 30%,transparent 55%);animation:flash .9s ease-out both}
+@keyframes flash{0%{opacity:1;transform:scale(.3)}100%{opacity:0;transform:scale(1.4)}}
+#splash .sp{position:relative;font-family:var(--f-display);font-weight:800;font-size:clamp(56px,15vw,170px);line-height:1;text-align:center;letter-spacing:.05em;
+  background:linear-gradient(180deg,#fffbe8,#ffd36e 35%,#ff8a2a 65%,#b8320f);-webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 0 18px rgba(255,120,30,.85)) drop-shadow(0 0 40px rgba(255,70,10,.5));animation:slam .95s cubic-bezier(.2,1.3,.4,1) both}
+#splash .sp small{display:block;font-size:.17em;letter-spacing:.35em;margin-top:.3em}
+#splash .sp .b{background:linear-gradient(180deg,#bfe0ff,#4a9be6);-webkit-background-clip:text;background-clip:text}
+#splash .sp .r{background:linear-gradient(180deg,#ffc9c2,#e5574a);-webkit-background-clip:text;background-clip:text}
+@keyframes slam{0%{opacity:0;transform:scale(3.2) rotate(-6deg)}22%{opacity:1;transform:scale(.92)}32%{transform:scale(1.04)}78%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1.15)}}
+.coinwrap{position:fixed;inset:0;z-index:66;display:grid;place-items:center;align-content:center;gap:28px;background:rgba(5,9,14,.78);perspective:900px;cursor:pointer;animation:enter .25s both}
+.coinwrap.out{animation:fadeout .3s both}
+@keyframes fadeout{to{opacity:0}}
+.coin{width:min(200px,50vw);aspect-ratio:1;max-width:100%;position:relative;transform-style:preserve-3d}
+.coin .face{position:absolute;inset:0;border-radius:50%;display:grid;place-content:center;text-align:center;padding:16px;backface-visibility:hidden;-webkit-backface-visibility:hidden;
+  border:6px double var(--gold);box-shadow:inset 0 0 30px rgba(0,0,0,.5),0 0 40px rgba(200,170,110,.35)}
+.coin .fa{background:radial-gradient(circle at 35% 30%,#7fc0ff,#1f5f9e 70%)}
+.coin .fb{background:radial-gradient(circle at 35% 30%,#ff9b90,#9e2a20 70%);transform:rotateY(180deg)}
+.coin small{font-family:var(--f-display);font-weight:800;letter-spacing:.2em;font-size:12px;color:#fff;opacity:.85}
+.coin b{font-size:20px;color:#fff;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-shadow:0 2px 6px rgba(0,0,0,.5)}
+.coinres{font-size:clamp(22px,5vw,34px);font-weight:700;color:var(--gold-hi);min-height:1.4em;text-align:center}
+.coinres b{color:var(--gold);animation:numpop .5s cubic-bezier(.2,1.6,.4,1) both;display:inline-block}
+.coinhint{font-size:12px;color:var(--muted)}
+.turn{--tc:var(--gold);border-color:var(--tc);background:color-mix(in srgb,var(--tc) 12%,transparent);animation:turnpulse 1.4s ease-in-out infinite}
+.turn .who{color:var(--tc);font-size:17px}
+@keyframes turnpulse{0%,100%{box-shadow:0 0 0 0 transparent}50%{box-shadow:0 0 22px 0 color-mix(in srgb,var(--tc) 55%,transparent)}}
+.order i.now{animation:blink .8s steps(2) infinite}
+@keyframes blink{50%{opacity:.4}}
+.card{transition:transform .15s,border-color .15s,box-shadow .15s,background .15s}
+.card:hover{transform:translateY(-3px);box-shadow:0 8px 24px rgba(0,0,0,.4),0 0 0 1px var(--gold),0 0 18px rgba(200,170,110,.35)}
+.card.picked{animation:picked .28s ease-in forwards;pointer-events:none}
+@keyframes picked{0%{transform:scale(1.08);box-shadow:0 0 34px 8px #ff8a2a;background:#4a2410;border-color:#ffd36e}100%{transform:scale(.6);opacity:0}}
+.mem li.pop{animation:pop .6s cubic-bezier(.2,1.6,.4,1)}
+@keyframes pop{0%{transform:scale(.5);opacity:0;box-shadow:inset 0 0 0 999px rgba(255,150,50,.6)}60%{opacity:1}100%{transform:none;box-shadow:inset 0 0 0 999px transparent}}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+  #bgfx{display:none}
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div class="toprow"><div class="eyebrow">SUMMONER'S RIFT · 5v5 CUSTOM</div><button class="btn small ghost" id="sfxBtn" type="button" aria-pressed="true">効果音 ON</button></div>
+    <h1>LoLカスタム チームメイカー</h1>
+  </header>
+
+  <nav class="views" role="tablist" aria-label="画面の切り替え">
+    <button class="view" role="tab" id="vMembers" aria-selected="true" type="button">メンバー設定</button>
+    <button class="view" role="tab" id="vSplit" aria-selected="false" type="button">チーム分け <span class="count" id="count2">参加 0 / 10</span></button>
+  </nav>
+
+  <div class="grid">
+    <section class="panel" id="viewMembers" aria-labelledby="rosterTitle">
+      <div class="ph">
+        <h2 id="rosterTitle">メンバー</h2>
+        <span class="count" id="count">参加 0 / 10</span>
+      </div>
+      <div class="pb">
+        <div class="sample" id="sampleBanner" hidden>
+          <span>いま表示しているのはサンプルのメンバーです。</span>
+          <button class="btn small" id="clearAll" type="button">全員削除して自分たちで登録</button>
+        </div>
+        <div class="legend">
+          <span>ロールはタップで切り替え：</span>
+          <span class="chip" data-s="0">なし</span>
+          <span class="chip" data-s="1">可</span>
+          <span class="chip" data-s="2">メイン</span>
+          <span>全部なし＝FILL（どこでも可）</span>
+        </div>
+        <div class="roster" id="roster"></div>
+        <div class="row-actions">
+          <button class="btn" id="addPl" type="button">＋ メンバーを追加</button>
+          <button class="btn ghost" id="allOff" type="button">全員の参加を外す</button>
+          <button class="btn ghost" id="rand10" type="button">ランダムに10人選ぶ</button>
+        </div>
+        <details>
+          <summary>まとめて登録 / 書き出し</summary>
+          <div class="pb" style="padding:12px 0 0">
+            <p class="note" style="margin:0">1行に1人、「名前, ランク, ロール」。メインのロールには ★ か * を付けます。書き出したテキストを身内に共有すれば、同じメンバー表を読み込めます。</p>
+            <textarea id="bulk" placeholder="たかし, ゴールド2, MID★ TOP&#10;Yuto, Emerald 4, JG★&#10;みさき, プラチナ1, SUP★ ADC&#10;そうた, シルバー3, FILL"></textarea>
+            <div class="row-actions">
+              <button class="btn" id="bulkAdd" type="button">追加で読み込む</button>
+              <button class="btn" id="bulkReplace" type="button">置き換えて読み込む</button>
+              <button class="btn ghost" id="bulkExport" type="button">今のメンバーを書き出す</button>
+            </div>
+            <div class="toast" id="bulkMsg"></div>
+          </div>
+        </details>
+        <div class="next"><button class="btn primary" id="goSplit" type="button">チーム分けへ進む →</button></div>
+      </div>
+    </section>
+
+    <section class="panel" id="viewSplit" aria-label="チーム分け" hidden>
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" id="tabBal" aria-selected="true" type="button"><b>ランク基準で自動分け</b><span>レート差とロール希望でランダム2分割</span></button>
+        <button class="tab" role="tab" id="tabDraft" aria-selected="false" type="button"><b>リーダードラフト</b><span>リーダー2人が交互にピック</span></button>
+      </div>
+
+      <div class="pb" id="paneBal">
+        <div class="opts">
+          <div class="field">
+            <span class="lbl">ロール希望の重視度</span>
+            <div class="seg" id="segRole">
+              <button type="button" data-v="0">気にしない</button>
+              <button type="button" data-v="1">標準</button>
+              <button type="button" data-v="2">最優先</button>
+            </div>
+          </div>
+          <div class="field">
+            <span class="lbl">ランダム性</span>
+            <div class="seg" id="segRand">
+              <button type="button" data-v="0">最適のみ</button>
+              <button type="button" data-v="1">少し</button>
+              <button type="button" data-v="2">多め</button>
+            </div>
+          </div>
+        </div>
+        <div class="row-actions">
+          <button class="btn primary big" id="runBal" type="button">チーム分けスタート</button>
+        </div>
+        <div class="msg" id="balMsg"></div>
+        <div id="balResult"></div>
+      </div>
+
+      <div class="pb" id="paneDraft" hidden>
+        <div id="draftArea"></div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+(()=>{
+const ROLES=['TOP','JG','MID','ADC','SUP'];
+const TIERS=[['IRON','アイアン','#7d6e66'],['BRONZE','ブロンズ','#a0714f'],['SILVER','シルバー','#9aa7b1'],['GOLD','ゴールド','#d6a74a'],['PLATINUM','プラチナ','#4fb3a5'],['EMERALD','エメラルド','#3fbf6f'],['DIAMOND','ダイヤ','#6f8fe8']];
+const DIVS=['IV','III','II','I'];
+const RANKS=[];
+TIERS.forEach(([k,jp,c],i)=>DIVS.forEach((d,j)=>RANKS.push({pts:i*400+j*100,label:jp+' '+d,color:c})));
+RANKS.push({pts:2800,label:'マスター',color:'#b06fd6'},{pts:3100,label:'グランドマスター',color:'#d65a5a'},{pts:3400,label:'チャレンジャー',color:'#f0d27a'});
+const rankOf=p=>{let r=RANKS[0];for(const x of RANKS) if(x.pts<=p) r=x;return r;};
+const avgLabel=avg=>rankOf(Math.round(avg/100)*100).label;
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid=()=>Math.random().toString(36).slice(2,9);
+const shuffle=a=>{for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;};
+const mkRoles=(main,ok=[])=>{const r={};ROLES.forEach(x=>r[x]=0);ok.forEach(x=>r[x]=1);main.forEach(x=>r[x]=2);return r;};
+
+const SAMPLE=[
+  ['たかし',1500,['MID'],['TOP']],['Yuto',2000,['JG'],[]],['みさき',1900,['SUP'],['ADC']],['Kenji',1100,['ADC'],[]],
+  ['はると',1300,['TOP'],['JG']],['Ren',2300,['MID'],['ADC']],['そうた',900,[],[]],['Mio',1200,['SUP'],[]],
+  ['りく',1600,['JG'],['TOP']],['Daichi',700,['TOP'],['SUP']],['あおい',1400,['ADC'],['MID']],['Shun',2500,['JG'],['MID']]
+];
+const KEY='lol-team-maker-v1';
+let S;
+function defaults(){return{players:SAMPLE.map(([n,p,m,o],i)=>({id:uid(),name:n,pts:p,roles:mkRoles(m,o),on:i<10})),sample:true,roleW:1,rand:1};}
+try{S=JSON.parse(localStorage.getItem(KEY))}catch(e){S=null}
+if(!S||!Array.isArray(S.players)) S=defaults();
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}};
+const parts=()=>S.players.filter(p=>p.on);
+const byId=id=>S.players.find(p=>p.id===id);
+
+/* ---------- FX / SFX ---------- */
+const REDUCE=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const GOLD_C=['#f0d27a','#c8aa6e','#fff3cf'],BLUE_C=['#4a9be6','#9fd0ff','#ffffff'],RED_C=['#e5574a','#ffa79e','#ffffff'];
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+if(S.sfx===undefined) S.sfx=true;
+const sfx=(()=>{
+  let ctx=null;
+  const ac=()=>{if(!S.sfx) return null;try{if(!ctx) ctx=new (window.AudioContext||window.webkitAudioContext)();if(ctx.state==='suspended') ctx.resume();}catch(e){return null}return ctx;};
+  function tone(f,d,type,v,slide,delay){const c=ac();if(!c) return;const t=c.currentTime+(delay||0);const o=c.createOscillator(),g=c.createGain();
+    o.type=type||'square';o.frequency.setValueAtTime(f,t);if(slide) o.frequency.exponentialRampToValueAtTime(Math.max(30,f+slide),t+d);
+    g.gain.setValueAtTime(v||.05,t);g.gain.exponentialRampToValueAtTime(.0001,t+d);o.connect(g).connect(c.destination);o.start(t);o.stop(t+d+.03);}
+  function noise(d,v,type,freq,delay){const c=ac();if(!c) return;const b=c.createBuffer(1,Math.floor(c.sampleRate*d),c.sampleRate),a=b.getChannelData(0);for(let i=0;i<a.length;i++) a[i]=(Math.random()*2-1)*Math.pow(1-i/a.length,2);
+    const s=c.createBufferSource(),f=c.createBiquadFilter(),g=c.createGain();s.buffer=b;f.type=type||'lowpass';f.frequency.value=freq||900;g.gain.value=v;s.connect(f).connect(g).connect(c.destination);s.start(c.currentTime+(delay||0));}
+  // anvil: inharmonic partials + a sharp metallic transient
+  function clang(base,v,dur,delay){[1,2.76,5.40,8.93].forEach((m,i)=>tone(base*m,dur/(1+i*.7),'sine',v/(1+i*.8),0,delay));noise(.05,v*2.2,'highpass',2500,delay);}
+  return{
+    tick:()=>tone(1100+Math.random()*500,.03,'square',.018),
+    lock:k=>clang(520+k*35,.11,.55),
+    slam:()=>{tone(85,.6,'sine',.28,-35);noise(.3,.45,'lowpass',450);clang(330,.15,1.3,.01);},
+    pick:()=>clang(820,.08,.4),
+    fanfare:()=>{clang(440,.17,1.6);clang(440,.12,1.1,.2);noise(1.6,.08,'highpass',3800,.3);},
+    coin:()=>tone(2200+Math.random()*300,.025,'sine',.03)
+  };
+})();
+const fx=(()=>{
+  const cv=document.createElement('canvas');cv.id='fx';document.body.append(cv);const g=cv.getContext('2d');let W=0,H=0;const P=[];let running=false;
+  function size(){const d=Math.min(2,devicePixelRatio||1);W=innerWidth;H=innerHeight;cv.width=W*d;cv.height=H*d;g.setTransform(d,0,0,d,0,0);}
+  size();addEventListener('resize',size);
+  const G=[];
+  // forge sparks: white-hot → yellow → orange → dull red as they cool
+  const heat=t=>t>.8?'255,250,228':t>.55?'255,214,110':t>.3?'255,140,40':'205,58,18';
+  function spark(x,y,a,sp,ws,split){const life=22+Math.random()*48;return{x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,gr:.3,life,max:life,w:(1+Math.random()*1.6)*ws,split,bounce:true};}
+  function loop(){g.globalCompositeOperation='source-over';g.clearRect(0,0,W,H);g.globalCompositeOperation='lighter';g.lineCap='round';
+    for(let i=G.length-1;i>=0;i--){const q=G[i];q.life--;if(q.life<=0){G.splice(i,1);continue;}const t=q.life/q.max;
+      const rg=g.createRadialGradient(q.x,q.y,0,q.x,q.y,q.r*(1.4-t*.4));rg.addColorStop(0,`rgba(255,235,190,${(.75*t).toFixed(3)})`);rg.addColorStop(.25,`rgba(255,150,50,${(.45*t).toFixed(3)})`);rg.addColorStop(1,'rgba(255,80,10,0)');
+      g.fillStyle=rg;g.fillRect(q.x-q.r*1.5,q.y-q.r*1.5,q.r*3,q.r*3);}
+    for(let i=P.length-1;i>=0;i--){const p=P[i];const px=p.x,py=p.y;p.vy+=p.gr;p.vx*=.985;p.vy*=.99;p.x+=p.vx;p.y+=p.vy;p.life--;
+      if(p.bounce&&p.y>H-3&&p.vy>0){p.y=H-3;p.vy*=-.3;p.vx*=.55;p.bounce=false;}
+      if(p.life<=0||p.x<-60||p.x>W+60||p.y>H+60){P.splice(i,1);continue;}
+      const t=p.life/p.max;g.strokeStyle=`rgba(${heat(t)},${Math.min(1,t*1.7).toFixed(3)})`;g.lineWidth=p.w*(.35+t);
+      g.beginPath();g.moveTo(px-p.vx*1.6,py-p.vy*1.6);g.lineTo(p.x,p.y);g.stroke();
+      if(p.split&&t<.65&&Math.random()<.05){p.split=false;for(let k=0;k<4;k++) P.push(spark(p.x,p.y,Math.random()*6.283,1.5+Math.random()*3.5,.6,false));}
+    }
+    g.globalCompositeOperation='source-over';
+    if(P.length||G.length) requestAnimationFrame(loop);else{running=false;g.clearRect(0,0,W,H);}}
+  const go=()=>{if(!running){running=true;requestAnimationFrame(loop);}};
+  function burst(x,y,n,_c,power){if(REDUCE) return;power=power||8;
+    for(let i=0;i<n;i++){const a=-Math.PI/2+(Math.random()-.5)*Math.PI*1.55,sp=power*(.45+Math.random()*1.15);P.push(spark(x,y,a,sp,1,Math.random()<.3));}
+    G.push({x,y,r:30+power*9,life:16,max:16});go();}
+  function strike(){if(REDUCE) return;
+    const d=document.createElement('div');d.className='heatflash';document.body.append(d);setTimeout(()=>d.remove(),800);
+    burst(W*.5,H*.62,170,null,19);setTimeout(()=>{burst(W*.3,H*.7,60,null,13);burst(W*.7,H*.7,60,null,13);},140);}
+  return{burst,strike,at(el,n,colors,p){const r=el.getBoundingClientRect();burst(r.left+r.width/2,r.top+r.height/2,n,colors,p);}};
+})();
+(function ambient(){
+  if(REDUCE) return;const cv=document.createElement('canvas');cv.id='bgfx';document.body.prepend(cv);const g=cv.getContext('2d');let W,H;
+  const size=()=>{const d=Math.min(2,devicePixelRatio||1);W=innerWidth;H=innerHeight;cv.width=W*d;cv.height=H*d;g.setTransform(d,0,0,d,0,0);};size();addEventListener('resize',size);
+  const M=Array.from({length:46},()=>({x:Math.random()*W,y:Math.random()*H,v:.15+Math.random()*.45,s:.6+Math.random()*1.8,p:Math.random()*6.28,dx:(Math.random()-.5)*.2}));
+  (function f(){g.clearRect(0,0,W,H);for(const m of M){m.y-=m.v;m.x+=m.dx;m.p+=.03;if(m.y<-10){m.y=H+10;m.x=Math.random()*W;}
+    const a=.3+.35*Math.sin(m.p);g.fillStyle=`rgba(255,${130+Math.round(70*Math.sin(m.p*.7))},40,${a.toFixed(3)})`;g.shadowColor='rgba(255,110,20,.9)';g.shadowBlur=8;g.beginPath();g.arc(m.x,m.y,m.s,0,6.283);g.fill();}
+    requestAnimationFrame(f);})();
+})();
+function splash(html){if(REDUCE) return;const d=document.createElement('div');d.id='splash';d.innerHTML=`<div class="sp">${html}</div>`;document.body.append(d);setTimeout(()=>d.remove(),1000);}
+function shake(){if(REDUCE) return;const w=document.querySelector('.wrap');w.classList.remove('shake');void w.offsetWidth;w.classList.add('shake');}
+function coinToss(a,b,first){return new Promise(res=>{
+  if(REDUCE){res();return;}
+  const ov=document.createElement('div');ov.className='coinwrap';
+  ov.innerHTML=`<div class="coin"><div class="face fa"><small>TEAM A</small><b>${esc(a)}</b></div><div class="face fb"><small>TEAM B</small><b>${esc(b)}</b></div></div><div class="coinres">コイントス…</div><div class="coinhint">タップでスキップ</div>`;
+  document.body.append(ov);const coin=ov.querySelector('.coin');const end=360*7+(first?180:0);
+  const anim=coin.animate([{transform:'translateY(0) rotateY(0deg) scale(1)'},{transform:`translateY(-110px) rotateY(${end*.6}deg) scale(1.15)`,offset:.45},{transform:`translateY(0) rotateY(${end}deg) scale(1)`}],{duration:2000,easing:'cubic-bezier(.25,.6,.35,1)',fill:'forwards'});
+  const tk=setInterval(()=>sfx.coin(),90);let finished=false;
+  anim.onfinish=()=>{clearInterval(tk);if(finished) return;finished=true;
+    ov.querySelector('.coinres').innerHTML=`先攻は <b>${esc(first?b:a)}</b>！`;ov.querySelector('.coinhint').textContent='';
+    sfx.fanfare();fx.at(coin,70,first?RED_C:BLUE_C,12);
+    ov.onclick=null;setTimeout(()=>{ov.classList.add('out');setTimeout(()=>{ov.remove();res();},300);},1300);};
+  ov.onclick=()=>anim.finish();
+});}
+const sfxBtn=document.getElementById('sfxBtn');
+const syncSfx=()=>{sfxBtn.setAttribute('aria-pressed',String(!!S.sfx));sfxBtn.textContent='効果音 '+(S.sfx?'ON':'OFF');};
+sfxBtn.onclick=()=>{S.sfx=!S.sfx;save();syncSfx();sfx.pick();};syncSfx();
+
+/* ---------- role assignment ---------- */
+const PERMS=[];(function g(a,rest){if(!rest.length){PERMS.push(a);return;}rest.forEach((x,i)=>g([...a,x],rest.filter((_,j)=>j!==i)));})([],[0,1,2,3,4]);
+function cost(p,role){const any=ROLES.some(r=>p.roles[r]>0);if(!any) return 1;const v=p.roles[role];return v===2?0:v===1?1:5;}
+const effPen=c=>c===0?0:c===1?50:300;
+function evalTeam(team){
+  let best=null,ties=0;
+  for(const perm of PERMS){
+    let c=0,e=0;
+    for(let i=0;i<5;i++){const cc=cost(team[i],ROLES[perm[i]]);c+=cc;e+=team[i].pts-effPen(cc);}
+    if(!best||c<best.c){best={perm,c,e};ties=1;}
+    else if(c===best.c){ties++;if(Math.random()<1/ties) best={perm,c,e};}
+  }
+  const mem=team.map((p,i)=>({p,role:ROLES[best.perm[i]],c:cost(p,ROLES[best.perm[i]])})).sort((a,b)=>ROLES.indexOf(a.role)-ROLES.indexOf(b.role));
+  const raw=team.reduce((s,p)=>s+p.pts,0);
+  return{mem,cost:best.c,eff:best.e,raw};
+}
+
+/* ---------- roster ---------- */
+const $=id=>document.getElementById(id);
+function rankOptions(sel){return RANKS.slice().reverse().map(r=>`<option value="${r.pts}"${r.pts===sel?' selected':''}>${r.label}</option>`).join('');}
+function renderRoster(){
+  $('roster').innerHTML=S.players.map(p=>`
+    <div class="pl ${p.on?'on':'off'}" data-id="${p.id}">
+      <input type="checkbox" class="chk" id="on-${p.id}" ${p.on?'checked':''} aria-label="${esc(p.name)} を参加にする">
+      <input type="text" id="nm-${p.id}" value="${esc(p.name)}" placeholder="サモナー名" aria-label="名前">
+      <select id="rk-${p.id}" aria-label="ランク">${rankOptions(p.pts)}</select>
+      <div class="chips">${ROLES.map(r=>`<button type="button" class="chip" data-role="${r}" data-s="${p.roles[r]}" aria-label="${r}">${r}</button>`).join('')}</div>
+      <button type="button" class="del" aria-label="削除" title="削除">×</button>
+    </div>`).join('')||'<p class="note" style="margin:0">メンバーがいません。「＋ メンバーを追加」か「まとめて登録」から登録してください。</p>';
+  renderCount();
+  $('sampleBanner').hidden=!S.sample;
+}
+function renderCount(){
+  const n=parts().length,el=$('count');
+  el.textContent=`参加 ${n} / 10`;el.className='count '+(n===10?'ok':'ng');
+  const el2=$('count2');el2.textContent=el.textContent;el2.className=el.className;
+  if(curTab==='draft' && draft.phase==='setup') renderDraft();
+}
+function touch(){if(S.sample){S.sample=false;$('sampleBanner').hidden=true;}save();}
+$('roster').addEventListener('input',e=>{
+  const row=e.target.closest('.pl');if(!row) return;const p=byId(row.dataset.id);
+  if(e.target.type==='text'){p.name=e.target.value;touch();}
+});
+$('roster').addEventListener('change',e=>{
+  const row=e.target.closest('.pl');if(!row) return;const p=byId(row.dataset.id);
+  if(e.target.type==='checkbox'){p.on=e.target.checked;row.className='pl '+(p.on?'on':'off');renderCount();save();}
+  else if(e.target.tagName==='SELECT'){p.pts=+e.target.value;touch();}
+});
+$('roster').addEventListener('click',e=>{
+  const row=e.target.closest('.pl');if(!row) return;const p=byId(row.dataset.id);
+  const chip=e.target.closest('.chip');
+  if(chip){const r=chip.dataset.role;p.roles[r]=(p.roles[r]+1)%3;chip.dataset.s=p.roles[r];touch();}
+  else if(e.target.closest('.del')){S.players=S.players.filter(x=>x!==p);touch();renderRoster();}
+});
+$('addPl').onclick=()=>{const p={id:uid(),name:'',pts:1200,roles:mkRoles([]),on:parts().length<10};S.players.push(p);touch();renderRoster();const el=$('nm-'+p.id);el&&el.focus();};
+$('allOff').onclick=()=>{S.players.forEach(p=>p.on=false);save();renderRoster();};
+$('rand10').onclick=()=>{const ids=shuffle(S.players.map(p=>p.id)).slice(0,10);S.players.forEach(p=>p.on=ids.includes(p.id));save();renderRoster();};
+$('clearAll').onclick=()=>{S.players=[];S.sample=false;save();renderRoster();$('balResult').innerHTML='';resetDraft();};
+
+/* ---------- bulk ---------- */
+const TIER_ALIAS=[['grandmaster',3100],['グランドマスター',3100],['gm',3100],['challenger',3400],['チャレンジャー',3400],['chal',3400],['master',2800],['マスター',2800],
+  ['iron',0],['アイアン',0],['bronze',400],['ブロンズ',400],['silver',800],['シルバー',800],['gold',1200],['ゴールド',1200],['platinum',1600],['プラチナ',1600],['plat',1600],
+  ['emerald',2000],['エメラルド',2000],['diamond',2400],['ダイヤモンド',2400],['ダイヤ',2400],['dia',2400]];
+const ROLE_ALIAS={top:'TOP','トップ':'TOP',jg:'JG',jungle:'JG',jng:'JG','ジャングル':'JG',mid:'MID','ミッド':'MID',adc:'ADC',ad:'ADC',bot:'ADC','ボット':'ADC',sup:'SUP',supp:'SUP',support:'SUP','サポート':'SUP','サポ':'SUP'};
+function parseRank(s){
+  s=(s||'').toLowerCase().replace(/\s+/g,'');
+  const t=TIER_ALIAS.find(([a])=>s.startsWith(a));if(!t) return null;
+  if(t[1]>=2800) return t[1];
+  const rest=s.slice(t[0].length);let d=2;
+  const m=rest.match(/^(iv|iii|ii|i|[1-4])/);
+  if(m){d={iv:4,iii:3,ii:2,i:1}[m[1]]||+m[1];}
+  return t[1]+(4-d)*100;
+}
+function parseBulk(text){
+  const out=[],bad=[];
+  text.split(/\n/).map(l=>l.trim()).filter(Boolean).forEach(line=>{
+    const [name,rank,roles='']=line.split(/[,、，\t]/).map(x=>x.trim());
+    const pts=parseRank(rank);
+    if(!name||pts===null){bad.push(line);return;}
+    const main=[],ok=[];
+    roles.split(/[\s/／・]+/).filter(Boolean).forEach(tok=>{
+      const star=/[★*＊]/.test(tok);const k=ROLE_ALIAS[tok.replace(/[★*＊]/g,'').toLowerCase()];
+      if(k)(star?main:ok).push(k);
+    });
+    out.push({id:uid(),name,pts,roles:mkRoles(main,ok),on:false});
+  });
+  return{out,bad};
+}
+function doBulk(replace){
+  const {out,bad}=parseBulk($('bulk').value);
+  if(!out.length){$('bulkMsg').textContent='読み込める行がありませんでした。「名前, ランク, ロール」の形か確認してください。';$('bulkMsg').style.color='var(--warn)';return;}
+  if(replace) S.players=[];
+  S.players.push(...out);
+  let n=parts().length;for(const p of out){if(n>=10) break;p.on=true;n++;}
+  S.sample=false;save();renderRoster();
+  $('bulkMsg').style.color=bad.length?'var(--warn)':'var(--ok)';
+  $('bulkMsg').textContent=`${out.length}人を読み込みました。`+(bad.length?` 読めなかった行：${bad.join(' / ')}`:'');
+}
+$('bulkAdd').onclick=()=>doBulk(false);
+$('bulkReplace').onclick=()=>doBulk(true);
+$('bulkExport').onclick=()=>{
+  $('bulk').value=S.players.map(p=>{
+    const rs=ROLES.filter(r=>p.roles[r]>0).sort((a,b)=>p.roles[b]-p.roles[a]).map(r=>r+(p.roles[r]===2?'★':'')).join(' ')||'FILL';
+    return `${p.name}, ${rankOf(p.pts).label.replace(' ','')}, ${rs}`;
+  }).join('\n');
+  $('bulkMsg').style.color='var(--ok)';$('bulkMsg').textContent='書き出しました。テキストをコピーして共有できます。';
+};
+
+/* ---------- result rendering ---------- */
+function buildResult(a,b,names,swappable){const ra=evalTeam(a),rb=evalTeam(b);return{teams:[ra,rb],names,swappable};}
+function fitTag(m){const any=ROLES.some(r=>m.p.roles[r]>0);if(!any) return '<span class="fit">FILL</span>';return m.c===0?'<span class="fit main">メイン</span>':m.c===1?'<span class="fit">可</span>':'<span class="fit offr">オフロール</span>';}
+function discordText(res){
+  const icon=['🟦','🟥'];
+  let t='**カスタム チーム分け**\n';
+  res.teams.forEach((tm,i)=>{
+    t+=`\n${icon[i]} **${res.names[i]}**　平均 ${avgLabel(tm.raw/5)}\n`;
+    tm.mem.forEach(m=>{t+=`\`${m.role.padEnd(3)}\` ${m.p.name||'（名前なし）'}（${rankOf(m.p.pts).label}）${m.c>=5?' ※オフロール':''}\n`;});
+  });
+  t+=`\n平均レート差: ${Math.round(Math.abs(res.teams[0].raw-res.teams[1].raw)/5)}pt`;
+  return t;
+}
+function renderResult(res,host,sel){
+  if(!res){host.innerHTML='';return;}
+  const [A,B]=res.teams;const diff=Math.abs(A.raw-B.raw)/5;
+  const off=A.mem.concat(B.mem).filter(m=>m.c>=5).length;
+  host.innerHTML=`
+    <div class="diff"><span>平均レート差 <span class="num">${Math.round(diff)}</span> pt</span><span>（100pt ≒ 1ディビジョン）</span>${off?`<span style="color:var(--warn)">オフロール ${off}人</span>`:'<span style="color:var(--ok)">全員希望ロール内</span>'}</div>
+    <div class="teams">${res.teams.map((tm,ti)=>`
+      <div class="team ${ti?'red':'blue'}">
+        <div class="th"><span class="side">${ti?'RED':'BLUE'}</span><span class="tname">${esc(res.names[ti])}</span><span class="avg">平均 <b>${avgLabel(tm.raw/5)}</b>（${Math.round(tm.raw/5)}pt）</span></div>
+        <ul class="mem ${res.swappable?'swappable':''}">${tm.mem.map((m,mi)=>`
+          <li data-t="${ti}" data-i="${mi}" class="${sel&&sel.t===ti&&sel.i===mi?'sel':''} ${res.flash&&res.flash.includes(m.p.id)?'lock':''}"><span class="role">${m.role}</span>
+          <span class="nm"><span class="dot" style="--t:${rankOf(m.p.pts).color}"></span><span class="nmt">${esc(m.p.name||'（名前なし）')}</span><span class="rk">${rankOf(m.p.pts).label}</span></span>${fitTag(m)}</li>`).join('')}
+        </ul>
+      </div>`).join('')}
+    </div>
+    ${res.swappable?'<p class="note" style="margin:0">BLUEとREDのメンバーを1人ずつタップすると入れ替えます（ロールは自動で再配置）。</p>':''}
+    <div class="row-actions"><button class="btn primary" type="button" data-act="copy">Discord用にコピー</button>${res.swappable?'<button class="btn" type="button" data-act="reroll">もう一度分ける</button>':''}</div>
+    <div class="toast" data-toast></div>
+    <pre class="out" data-out>${esc(discordText(res))}</pre>`;
+}
+function copyOut(host,res){
+  const txt=discordText(res),toast=host.querySelector('[data-toast]');
+  const fallback=()=>{const pre=host.querySelector('[data-out]');const r=document.createRange();r.selectNodeContents(pre);const s=getSelection();s.removeAllRanges();s.addRange(r);toast.textContent='自動コピーできなかったので、下のテキストを選択しました。Ctrl+C / ⌘+C でコピーしてください。';toast.style.color='var(--warn)';};
+  try{navigator.clipboard.writeText(txt).then(()=>{toast.style.color='var(--ok)';toast.textContent='コピーしました。Discordに貼り付けてください。';sfx.pick();const cb=host.querySelector('[data-act="copy"]');cb&&fx.at(cb,26,GOLD_C,6);},fallback);}catch(e){fallback();}
+}
+
+/* ---------- balance mode ---------- */
+const ROLE_W=[0,40,150],TOPK=[1,6,20];
+let balRes=null,balSel=null;
+function segInit(id,key){
+  const seg=$(id);const sync=()=>seg.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.v===S[key])));
+  seg.onclick=e=>{const b=e.target.closest('button');if(!b) return;S[key]=+b.dataset.v;save();sync();};sync();
+}
+segInit('segRole','roleW');segInit('segRand','rand');
+let busy=false,skipReveal=false;
+function runBalance(anim){
+  if(busy) return;
+  const ps=parts();$('balMsg').textContent='';
+  if(ps.length!==10){$('balMsg').textContent=`参加メンバーがちょうど10人必要です（いま ${ps.length}人）。左の一覧でチェックを調整してください。`;return;}
+  const sh=shuffle(ps.slice()),memo=new Map(),W=ROLE_W[S.roleW];
+  const ev=mask=>{if(!memo.has(mask)){const t=[];for(let i=0;i<10;i++) if(mask>>i&1) t.push(sh[i]);memo.set(mask,evalTeam(t));}return memo.get(mask);};
+  const cands=[];
+  for(let m=0;m<1024;m++){
+    if(!(m&1)) continue;let c=0;for(let i=0;i<10;i++) c+=m>>i&1;if(c!==5) continue;
+    const a=ev(m),b=ev(1023^m);
+    const score=Math.abs(a.eff-b.eff)/5+W*(a.cost+b.cost);
+    cands.push({a,b,score});
+  }
+  cands.sort((x,y)=>x.score-y.score);
+  const pick=cands[Math.floor(Math.random()*Math.min(TOPK[S.rand],cands.length))];
+  const pair=Math.random()<.5?[pick.a,pick.b]:[pick.b,pick.a];
+  balRes={teams:pair,names:['BLUEチーム','REDチーム'],swappable:true};balSel=null;
+  if(anim===true) reveal($('balResult'),balRes);
+  else renderResult(balRes,$('balResult'),balSel);
+}
+$('runBal').onclick=()=>runBalance(true);
+
+/* slot-machine reveal */
+async function reveal(host,res){
+  busy=true;skipReveal=false;
+  renderResult(res,host,null);
+  host.classList.add('revealing');
+  const lis=[...host.querySelectorAll('.mem li')];
+  if(REDUCE){host.classList.remove('revealing');busy=false;return;}
+  const order=[];for(let i=0;i<5;i++) order.push(lis[i],lis[5+i]);
+  const names=parts().map(p=>p.name||'？');
+  const slots=order.map(li=>{const t=li.querySelector('.nmt');li.classList.add('rolling');return{li,t,real:t.textContent};});
+  shake();sfx.slam();
+  splash('<span class="b">BLUE</span> <small style="display:inline;font-size:.4em;letter-spacing:.1em">VS</small> <span class="r">RED</span><small>TEAM SPLIT</small>');
+  let alive=true;
+  (function roll(){if(!alive) return;slots.forEach(s=>{if(s.li.classList.contains('rolling')) s.t.textContent=names[Math.floor(Math.random()*names.length)];});sfx.tick();setTimeout(roll,70);})();
+  await wait(900);
+  for(let k=0;k<slots.length;k++){
+    if(!skipReveal) await wait(k===slots.length-1?520:230);
+    const s=slots[k];s.t.textContent=s.real;s.li.classList.remove('rolling');s.li.classList.add('lock');
+    if(!skipReveal){sfx.lock(k);fx.at(s.li,18,k%2?RED_C:BLUE_C,6);}
+    if(k===slots.length-1 && !skipReveal) shake();
+  }
+  alive=false;
+  host.classList.remove('revealing');
+  host.querySelector('.teams').classList.add('glow');
+  sfx.fanfare();fx.strike();
+  countDown(host.querySelector('.diff .num'));
+  busy=false;
+}
+function countDown(el){
+  if(!el) return;const to=+el.textContent,from=Math.max(999,to+400),t0=performance.now(),D=900;let last=0;
+  (function step(t){const k=Math.min(1,(t-t0)/D),e=1-Math.pow(1-k,3);el.textContent=Math.round(from+(to-from)*e);
+    if(t-last>60){sfx.tick();last=t;}
+    if(k<1) requestAnimationFrame(step);else{el.textContent=to;el.classList.add('done');}})(t0);
+}
+$('balResult').addEventListener('click',e=>{
+  const act=e.target.closest('[data-act]');
+  if(busy){skipReveal=true;return;}
+  if(act){act.dataset.act==='copy'?copyOut($('balResult'),balRes):runBalance(true);return;}
+  const li=e.target.closest('li[data-t]');if(!li||!balRes) return;
+  const t=+li.dataset.t,i=+li.dataset.i;
+  balRes.flash=null;
+  if(!balSel||balSel.t===t){balSel=(balSel&&balSel.t===t&&balSel.i===i)?null:{t,i};sfx.tick();}
+  else{
+    const A=balRes.teams[0].mem.map(m=>m.p),B=balRes.teams[1].mem.map(m=>m.p);
+    const ai=balSel.t===0?balSel.i:i,bi=balSel.t===1?balSel.i:i;
+    const flash=[A[ai].id,B[bi].id];
+    [A[ai],B[bi]]=[B[bi],A[ai]];
+    balRes=buildResult(A,B,balRes.names,true);balRes.flash=flash;balSel=null;
+    sfx.pick();fx.at(li,24,GOLD_C,7);
+  }
+  renderResult(balRes,$('balResult'),balSel);
+});
+
+/* ---------- draft mode ---------- */
+let draft;
+function resetDraft(){draft={phase:'setup',leaders:[null,null],order:'snake',first:0,seq:[],hist:[],res:null,msg:''};if(curTab==='draft') renderDraft();}
+const leaderName=i=>{const p=byId(draft.leaders[i]);return p?(p.name||'（名前なし）'):'?';};
+function teamsNow(){const t=[[byId(draft.leaders[0])],[byId(draft.leaders[1])]];draft.hist.forEach(h=>t[h.t].push(byId(h.id)));return t.map(x=>x.filter(Boolean));}
+function renderDraft(){
+  const host=$('draftArea'),ps=parts();
+  if(draft.phase==='setup'){
+    const ids=ps.map(p=>p.id);
+    draft.leaders=draft.leaders.map(l=>ids.includes(l)?l:null);
+    const opt=sel=>'<option value="">選択してください</option>'+ps.map(p=>`<option value="${p.id}"${p.id===sel?' selected':''}>${esc(p.name||'（名前なし）')}（${rankOf(p.pts).label}）</option>`).join('');
+    host.innerHTML=`<div class="pb" style="padding:0">
+      <div class="field"><span class="lbl">チームリーダー</span>
+        <div class="leaders"><select id="ldA" aria-label="リーダー1">${opt(draft.leaders[0])}</select><select id="ldB" aria-label="リーダー2">${opt(draft.leaders[1])}</select></div>
+        <div><button class="btn small ghost" type="button" id="ldRand">ランダムで決める</button></div>
+      </div>
+      <div class="field"><span class="lbl">ピック順（残り8人）</span>
+        <div class="seg" id="segOrder"><button type="button" data-v="snake" aria-pressed="${draft.order==='snake'}">スネーク 1-2-2-2-1</button><button type="button" data-v="alt" aria-pressed="${draft.order==='alt'}">交互 1-1-1…</button></div>
+      </div>
+      <p class="note" style="margin:0">先攻はコイントスで決めます。後攻のチームにサイド（BLUE/RED）を選ばせると公平です。</p>
+      <div class="row-actions"><button class="btn primary" type="button" id="dStart">コイントスしてドラフト開始</button></div>
+      <div class="msg">${draft.msg||(ps.length!==10?`参加メンバーがちょうど10人必要です（いま ${ps.length}人）。`:'')}</div>
+    </div>`;
+    $('ldA').onchange=e=>{draft.leaders[0]=e.target.value||null;};
+    $('ldB').onchange=e=>{draft.leaders[1]=e.target.value||null;};
+    $('ldRand').onclick=()=>{const s=shuffle(ps.map(p=>p.id));draft.leaders=[s[0]||null,s[1]||null];draft.msg='';renderDraft();};
+    $('segOrder').onclick=e=>{const b=e.target.closest('button');if(!b) return;draft.order=b.dataset.v;renderDraft();};
+    $('dStart').onclick=()=>{
+      if(ps.length!==10){draft.msg=`参加メンバーがちょうど10人必要です（いま ${ps.length}人）。`;return renderDraft();}
+      if(!draft.leaders[0]||!draft.leaders[1]||draft.leaders[0]===draft.leaders[1]){draft.msg='リーダーを別々の2人で選んでください。';return renderDraft();}
+      draft.first=Math.random()<.5?0:1;
+      const base=draft.order==='snake'?[0,1,1,0,0,1,1,0]:[0,1,0,1,0,1,0,1];
+      draft.seq=base.map(x=>x===0?draft.first:1-draft.first);draft.hist=[];draft.msg='';draft.pool=ps.map(p=>p.id).filter(id=>!draft.leaders.includes(id));
+      coinToss(leaderName(0),leaderName(1),draft.first).then(()=>{draft.phase='pick';draft.lastPick=null;draft.celebrated=false;renderDraft();});
+    };
+    return;
+  }
+  if(draft.phase==='pick'){
+    const step=draft.hist.length,cur=draft.seq[step];
+    const taken=new Set(draft.hist.map(h=>h.id));
+    const pool=draft.pool.map(byId).filter(p=>p&&!taken.has(p.id));
+    const t=teamsNow();
+    host.innerHTML=`<div class="pb" style="padding:0">
+      <p class="note" style="margin:0">コイントスの結果、<b style="color:var(--gold-hi)">${esc(leaderName(draft.first))}</b> が先攻です。</p>
+      <div class="turn" style="--tc:var(--${cur===0?'blue':'red'})"><span class="who">${esc(leaderName(cur))} のピック</span><span class="step">${step+1} / 8</span>
+        <div class="order">${draft.seq.map((s,i)=>`<i class="${s===0?'a':'b'} ${i<step?'done':''} ${i===step?'now':''}">${s===0?'A':'B'}</i>`).join('')}</div></div>
+      <div class="pool">${pool.map(p=>`<button type="button" class="card" data-id="${p.id}"><span class="nm"><span class="dot" style="--t:${rankOf(p.pts).color}"></span>${esc(p.name||'（名前なし）')}</span><span class="rk">${rankOf(p.pts).label}</span><span class="rl">${ROLES.some(r=>p.roles[r]>0)?ROLES.filter(r=>p.roles[r]>0).sort((a,b)=>p.roles[b]-p.roles[a]).map(r=>`<span class="${p.roles[r]===2?'m':''}">${r}</span>`).join(''):'<span>FILL</span>'}</span></button>`).join('')}</div>
+      <div class="teams">${t.map((tm,ti)=>`<div class="team ${ti?'red':'blue'}"><div class="th"><span class="side">TEAM ${ti?'B':'A'}</span><span class="tname">${esc(leaderName(ti))}チーム</span><span class="avg">${tm.length}/5人</span></div>
+        <ul class="mem">${tm.map((p,i)=>`<li class="${p.id===draft.lastPick?'pop':''}"><span class="role">${i===0?'LEAD':'#'+i}</span><span class="nm">${esc(p.name||'（名前なし）')}<span class="rk">${rankOf(p.pts).label}</span></span><span></span></li>`).join('')}</ul></div>`).join('')}</div>
+      <div class="row-actions"><button class="btn" type="button" id="dUndo" ${step?'':'disabled'}>1手戻す</button><button class="btn ghost" type="button" id="dReset">最初からやり直す</button></div>
+    </div>`;
+    host.querySelector('.pool').onclick=e=>{const c=e.target.closest('.card');if(!c||busy) return;
+      busy=true;c.classList.add('picked');sfx.pick();fx.at(c,30,cur===0?BLUE_C:RED_C,8);
+      setTimeout(()=>{busy=false;draft.hist.push({t:cur,id:c.dataset.id});draft.lastPick=c.dataset.id;
+        if(draft.hist.length===8){const tt=teamsNow();draft.res=buildResult(tt[0],tt[1],[leaderName(0)+'チーム',leaderName(1)+'チーム'],false);draft.phase='done';}renderDraft();},REDUCE?0:260);};
+    $('dUndo').onclick=()=>{draft.hist.pop();renderDraft();};
+    $('dReset').onclick=resetDraft;
+    return;
+  }
+  host.innerHTML=`<div class="pb" style="padding:0"><p class="note" style="margin:0">ドラフト完了。ロールは各メンバーの希望から自動で割り当てています。TEAM A=左（青）、TEAM B=右（赤）。サイドは後攻の ${esc(leaderName(1-draft.first))} が選んでください。</p><div id="dRes"></div>
+    <div class="row-actions"><button class="btn" type="button" id="dUndo2">最後のピックを戻す</button><button class="btn ghost" type="button" id="dReset2">新しいドラフト</button></div></div>`;
+  renderResult(draft.res,$('dRes'));
+  if(!draft.celebrated){draft.celebrated=true;shake();sfx.slam();setTimeout(()=>{sfx.fanfare();fx.strike();},250);
+    splash('DRAFT<small>COMPLETE</small>');const tm=$('dRes').querySelector('.teams');tm&&tm.classList.add('glow');}
+  $('dRes').onclick=e=>{const a=e.target.closest('[data-act="copy"]');if(a) copyOut($('dRes'),draft.res);};
+  $('dUndo2').onclick=()=>{draft.hist.pop();draft.phase='pick';renderDraft();};
+  $('dReset2').onclick=resetDraft;
+}
+
+/* ---------- tabs ---------- */
+let curTab='bal';
+function setTab(t){curTab=t;$('tabBal').setAttribute('aria-selected',String(t==='bal'));$('tabDraft').setAttribute('aria-selected',String(t==='draft'));$('paneBal').hidden=t!=='bal';$('paneDraft').hidden=t!=='draft';if(t==='draft') renderDraft();}
+$('tabBal').onclick=()=>setTab('bal');$('tabDraft').onclick=()=>setTab('draft');
+function setView(v){
+  $('vMembers').setAttribute('aria-selected',String(v==='members'));$('vSplit').setAttribute('aria-selected',String(v==='split'));
+  $('viewMembers').hidden=v!=='members';$('viewSplit').hidden=v!=='split';
+  if(v==='split' && curTab==='draft') renderDraft();
+  const sec=$(v==='members'?'viewMembers':'viewSplit');sec.classList.remove('enter');void sec.offsetWidth;sec.classList.add('enter');
+  sfx.tick();
+  window.scrollTo({top:0});
+}
+$('vMembers').onclick=()=>setView('members');$('vSplit').onclick=()=>setView('split');$('goSplit').onclick=()=>setView('split');
+
+resetDraft();renderRoster();
+if(parts().length===10) runBalance();
+})();
+</script>
+</body>
+</html>
